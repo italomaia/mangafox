@@ -92,8 +92,8 @@ def load_chapters(url):
 
 def arg_to_list(arg):
     """
-    Converts a string in the format 'number|number[-number]' to a range of numbers.
-    If separated by comma, all expressions are evaluated individually.
+    Converts a string in the format 'number|number[-number]' to a range of
+    numbers. If separated by comma, all expressions are evaluated individually.
     Returns `Set`
 
     >>> arg_to_list('1')
@@ -156,7 +156,7 @@ def download_command(name, args, enumerate_ch=False):
     url = make_manga_url(name)
     chapters = load_chapters(url)
     folder_name_fn = make_folder_name_enum if enumerate_ch \
-        else make_folder_name 
+        else make_folder_name
 
     if args:
         for arg in args:
@@ -167,7 +167,7 @@ def download_command(name, args, enumerate_ch=False):
                 chapter = chapters[index]
                 download_chapter(chapter, folder_name_fn(index, chapter))
 
-    elif raw_input('Download all chapters? (y/n)\n') == 'y':
+    elif input('Download all chapters? (y/n)\n') == 'y':
         for index, chapter in enumerate(chapters):
             download_chapter(chapter, folder_name_fn(index, chapter))
     else:
@@ -233,7 +233,7 @@ def search_command(value):
         data = requests.get(url).text
     except urllib.error.URLError:
         # mangafox requires a 5 seconds delay
-        # between searches 
+        # between searches
         import time
         time.sleep(5)
         data = requests.get(url).text
@@ -261,7 +261,8 @@ def search_command(value):
 
 
 def make_manga_url(name):
-    return "{domain}manga/{name}/?no_warning=1".format(domain=domain, name=name)
+    return "{domain}manga/{name}/?no_warning=1"\
+        .format(domain=domain, name=name)
 
 
 if __name__ == "__main__":
@@ -270,11 +271,16 @@ if __name__ == "__main__":
     comic_uri = None
 
     parser = argparse.ArgumentParser(description='MangaFox script')
-    parser.add_argument('name', type=str, nargs='?', help='comic name (ex: boku_no_hero_academia)')
+    parser.add_argument(
+        'name', type=str, nargs='?',
+        help='comic name (ex: boku_no_hero_academia)')
     parser.add_argument('-d', '--download', type=str, nargs='*')
-    parser.add_argument('-f', '--find', type=str, help='Search for mangas in the database')
-    parser.add_argument('-s', '--show', action='store_true', help='Show manga information')
-    parser.add_argument('-n', '--enumerate', action='store_true', help='List all pages')
+    parser.add_argument(
+        '-f', '--find', type=str, help='Search for mangas in the database')
+    parser.add_argument(
+        '-s', '--show', action='store_true', help='Show manga information')
+    parser.add_argument(
+        '-n', '--enumerate', action='store_true', help='List all pages')
     args = parser.parse_args()
 
     if args.find:
