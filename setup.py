@@ -8,6 +8,10 @@ setup(
     description='Mangafox manga spider. Download chapters easily.',
     author='Italo Maia',
     url='http://italomaia.com',
-    install_requires=['parsel', 'werkzeug', 'requests'],
+    install_requires=[
+        'parsel',
+        'werkzeug',
+        'requests'
+    ],
     scripts=['mangafox.py'],
 )

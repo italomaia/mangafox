@@ -3,9 +3,10 @@
 import re
 import os
 import sys
-from parsel import Selector
+from urllib.parse import urlparse
 import requests
 import werkzeug
+from parsel import Selector
 
 import urllib.parse
 from collections import OrderedDict as odict
@@ -17,47 +18,141 @@ sys.path.insert(0, dirname)
 domain = 'http://mangafox.me/'
 
 
-def download_page(url, folder_name):
-    text = requests.get(url).text
-    sel = Selector(text)
+class InputParser:
+    pass
 
-    for src in sel.css("img[id='image']::attr(src)").extract():
-        basename = os.path.basename(src)
-        safe_basename = werkzeug.utils.secure_filename(basename)
-        filename = os.path.join(folder_name, safe_basename)
-        filename = os.path.abspath(filename)
 
-        # file is not there or has a invalid size ...
-        if not os.path.exists(filename) or os.path.getsize(filename) == 0:
-            data = requests.get(src).content
+class QueryInputParser(InputParser):
+    pass
 
-            with open(filename, 'wb') as file:
-                file.write(data)
 
-            print('{0} written.'.format(filename))
-        else:
-            print('{0} exists. Skipping.'.format(filename))
+class DownloadInputParser(InputParser):
+    pass
+
+
+class Command:
+    pass
+
+
+class Search(Command):
+    REQUEST_BODY = {
+        'advopts': '1',
+        'artist': '',
+        'artist_method': 'cw',
+        'author': '',
+        'author_method': 'cw',
+        'genres[Action]': '0',
+        'genres[Adult]': '0',
+        'genres[Adventure]': '0',
+        'genres[Comedy]': '0',
+        'genres[Doujinshi]': '0',
+        'genres[Drama]': '0',
+        'genres[Ecchi]': '0',
+        'genres[Fantasy]': '0',
+        'genres[Gender+Bender]': '0',
+        'genres[Harem]': '0',
+        'genres[Historical]': '0',
+        'genres[Horror]': '0',
+        'genres[Josei]': '0',
+        'genres[Martial+Arts]': '0',
+        'genres[Mature]': '0',
+        'genres[Mecha]': '0',
+        'genres[Mystery]': '0',
+        'genres[One+Shot]': '0',
+        'genres[Psychological]': '0',
+        'genres[Romance]': '0',
+        'genres[School+Life]': '0',
+        'genres[Sci-fi]': '0',
+        'genres[Seinen]': '0',
+        'genres[Shoujo+Ai]': '0',
+        'genres[Shoujo]': '0',
+        'genres[Shounen+Ai]': '0',
+        'genres[Shounen]': '0',
+        'genres[Slice+of+Life]': '0',
+        'genres[Smut]': '0',
+        'genres[Sports]': '0',
+        'genres[Supernatural]': '0',
+        'genres[Tragedy]': '0',
+        'genres[Webtoons]': '0',
+        'genres[Yaoi]': '0',
+        'genres[Yuri]': '0',
+        'is_completed': '',
+        'name': '',  # required
+        'name_method': 'cw',
+        'rating': '',
+        'rating_method': 'eq',
+        'released': '',
+        'released_method': 'eq',
+        'type': ''
+    }
+
+    input_parser = QueryInputParser()
+
+    def __init__(self, args):
+        self.input_parser.add_args(args)
+
+    def run(self, arg):
+        pass
+
+    def request(self):
+
+        for arg in self.input_parser:
+            self.run(arg)
+
+
+def download_page(src, folder_name, index):
+    parsed = urlparse(src)
+    name, ext = os.path.splitext(parsed.path)
+    filename = '%03d%s' % (index, ext)
+    filename = werkzeug.utils.secure_filename(filename)
+    filename = os.path.join(folder_name, filename)
+    filename = os.path.abspath(filename)
+
+    # file is not there or has a invalid size ...
+    if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+        data = requests.get(src).content
+
+        with open(filename, 'wb') as file:
+            file.write(data)
+
+        print('{0} written.'.format(filename))
+    else:
+        print('{0} exists. Skipping.'.format(filename))
 
 
 def download_chapter(chapter, folder_name):
     """
     Grabs all images from a chapter and writes them down to filesystem.
 
+    :param chapter: chapter info dict
     """
-
+    chapter_href = chapter['href']
+    base = os.path.dirname(chapter_href)
     folder_name = werkzeug.utils.secure_filename(folder_name)
 
     # if the folder does not exist ...
-    if not os.path.exists(folder_name):
-        os.mkdir(folder_name)
+    if not os.path.exists(folder_name): os.mkdir(folder_name)
 
-    text = requests.get(chapter['href']).text
-    sel = Selector(text)
+    index = 0
+    resp = requests.get(chapter_href)
 
-    for value in sel.css("select[class='m'] > option::attr(value)").extract():
-        value = int(value)
-        url = re.sub(r'\d+\.html', '%d.html' % value, chapter['href'])
-        download_page(url, folder_name)
+    while resp.status_code == 200:
+        sel = Selector(resp.text)
+        src = sel.css('#image::attr(src)').extract_first()
+
+        if src is None:
+            print('src not found')
+            break
+        else:
+            index += 1
+            download_page(src, folder_name, index)
+            next_page_path = sel.css('#viewer a::attr(href)').extract_first()
+
+            if next_page_path is None:
+                print('next page path not found')
+                break
+            else:
+                resp = requests.get(os.path.join(base, next_page_path))
 
 
 def hel_to_chapter(el):
@@ -114,7 +209,7 @@ def arg_to_list(arg):
         elif list_c.match(bit):
             m = list_c.match(bit)
             l, u = m.groups()
-            rset.update(range(int(l), int(u)+1))
+            rset.update(range(int(l), int(u) + 1))
     return rset
 
 
@@ -123,7 +218,7 @@ def show_command(name):
     prints all avaiable chapters
 
     """
-    url = make_manga_url(name)
+    url = _make_manga_url(name)
     chapters = load_chapters(url)
     line_template = "{index:^7s} :: {name:30s} :: {title}"
     header = line_template.format(index='Index', name='Chapter', title='Title')
@@ -153,28 +248,31 @@ def download_command(name, args, enumerate_ch=False):
     0-2,4 - downloads chapter 0, 1, 2 and 4
 
     """
-    url = make_manga_url(name)
+    url = _make_manga_url(name)
     chapters = load_chapters(url)
     folder_name_fn = make_folder_name_enum if enumerate_ch \
         else make_folder_name
 
-    if args:
-        for arg in args:
+    for arg in args:
+        if arg == 'all':
+            if input('Download all chapters (y/n)? ') == 'y':
+                for index, chapter in enumerate(chapters):
+                    download_chapter(chapter, folder_name_fn(index, chapter))
+        else:
             # force evaluation
             chapters = tuple(chapters)
-
             for index in arg_to_list(arg):
-                chapter = chapters[index]
-                download_chapter(chapter, folder_name_fn(index, chapter))
-
-    elif input('Download all chapters? (y/n)\n') == 'y':
-        for index, chapter in enumerate(chapters):
-            download_chapter(chapter, folder_name_fn(index, chapter))
-    else:
-        print('nothing to download')
+                chapter = chapters[index]  # dict
+                folder_name = folder_name_fn(index, chapter)
+                download_chapter(chapter, folder_name)
 
 
 def search_command(value):
+    """
+    Search mangafox by your desired manga.
+
+    :param value:
+    """
     url = "{domain}/search.php?".format(domain=domain)
     quote = urllib.parse.quote(value)
     query = {
@@ -241,7 +339,7 @@ def search_command(value):
     sel = Selector(data)
     results = list()
 
-    for link in sel.css('td:first-child > a:first-child'):
+    for div in sel.css('#mangalist .list li div'):
         manga_url = link.css('::attr(href)').extract_first()
         name = manga_url[7:].split('/')[2]
         results.append(odict([
@@ -260,7 +358,8 @@ def search_command(value):
         print('No results found')
 
 
-def make_manga_url(name):
+def _make_manga_url(name):
+    """Construct a valid manga url form mangafox."""
     return "{domain}manga/{name}/?no_warning=1"\
         .format(domain=domain, name=name)
 
@@ -268,28 +367,34 @@ def make_manga_url(name):
 if __name__ == "__main__":
     import argparse
 
-    comic_uri = None
+    parser = argparse.ArgumentParser(description='''MangaFox script
 
-    parser = argparse.ArgumentParser(description='MangaFox script')
+Usage:
+
+mangafox.py -h  # diplays options
+mangafox.py -f "one piece"  # is one piece available?
+mangafox.py -f "one piece" | mangafox.py -s  # show info on what you find
+# download everything that you find
+mangafox.py -f "one piece" | mangafox.py -d
+# download first three chapters of what you find
+mangafox.py -f "one piece" | mangafox.py -d 1,2,3
+''')
     parser.add_argument(
         'name', type=str, nargs='?',
         help='comic name (ex: boku_no_hero_academia)')
-    parser.add_argument('-d', '--download', type=str, nargs='*')
+    parser.add_argument('-d', '--download', type=str, nargs=1)
     parser.add_argument(
         '-f', '--find', type=str, help='Search for mangas in the database')
     parser.add_argument(
         '-s', '--show', action='store_true', help='Show manga information')
     parser.add_argument(
-        '-n', '--enumerate', action='store_true', help='List all pages')
+        '-e', '--enumerate',
+        action='store_true', help='Chapter names as number')
     args = parser.parse_args()
 
     if args.find:
         search_command(args.find)
-    elif args.name:
-        name = args.name
-
-        if args.download:
-            download_command(name, args.download, args.enumerate)
-
-        elif args.show:
-            show_command(name)
+    elif args.name and args.download:
+        download_command(args.name, args.download, args.enumerate)
+    elif args.name and args.show:
+        show_command(args.name)
