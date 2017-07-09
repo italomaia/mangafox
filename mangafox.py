@@ -16,6 +16,7 @@ dirname = os.path.abspath(os.path.dirname('.'))
 sys.path.insert(0, dirname)
 
 domain = 'http://mangafox.me/'
+opt_prefix = ''
 
 
 class InputParser:
@@ -131,7 +132,8 @@ def download_chapter(chapter, folder_name):
     folder_name = werkzeug.utils.secure_filename(folder_name)
 
     # if the folder does not exist ...
-    if not os.path.exists(folder_name): os.mkdir(folder_name)
+    if not os.path.exists(folder_name):
+        os.mkdir(folder_name)
 
     index = 0
     resp = requests.get(chapter_href)
@@ -236,10 +238,10 @@ def make_folder_name(index, chapter):
 
 
 def make_folder_name_enum(index, chapter):
-    return '%03d' % index
+    return 'ch%03d' % index
 
 
-def download_command(name, args, enumerate_ch=False):
+def download_command(name, args):
     """
     Downloads all asked chapters.
     Valid input formats:
@@ -250,14 +252,16 @@ def download_command(name, args, enumerate_ch=False):
     """
     url = _make_manga_url(name)
     chapters = load_chapters(url)
-    folder_name_fn = make_folder_name_enum if enumerate_ch \
-        else make_folder_name
+    folder_name_fn = make_folder_name_enum
 
     for arg in args:
         if arg == 'all':
             if input('Download all chapters (y/n)? ') == 'y':
                 for index, chapter in enumerate(chapters):
-                    download_chapter(chapter, folder_name_fn(index, chapter))
+                    folder_name = folder_name_fn(index, chapter)
+                    folder_name = (opt_prefix + '_' + folder_name)\
+                        if opt_prefix else folder_name
+                    download_chapter(chapter, folder_name)
         else:
             # force evaluation
             chapters = tuple(chapters)
@@ -340,10 +344,10 @@ def search_command(value):
     results = list()
 
     for div in sel.css('#mangalist .list li div'):
-        manga_url = link.css('::attr(href)').extract_first()
+        manga_url = div.css('::attr(href)').extract_first()
         name = manga_url[7:].split('/')[2]
         results.append(odict([
-            ('title', link.css('::text').extract_first()),
+            ('title', div.css('::text').extract_first()),
             ('name', "%s (use for download)" % name),
             ('url', manga_url),
         ]))
@@ -388,13 +392,15 @@ mangafox.py -f "one piece" | mangafox.py -d 1,2,3
     parser.add_argument(
         '-s', '--show', action='store_true', help='Show manga information')
     parser.add_argument(
-        '-e', '--enumerate',
-        action='store_true', help='Chapter names as number')
+        '-p', '--prefix', default='', help='chapter prefix')
     args = parser.parse_args()
+
+    global opt_prefix
+    opt_prefix = args.prefix
 
     if args.find:
         search_command(args.find)
     elif args.name and args.download:
-        download_command(args.name, args.download, args.enumerate)
+        download_command(args.name, args.download)
     elif args.name and args.show:
         show_command(args.name)
