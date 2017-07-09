@@ -127,6 +127,9 @@ def download_chapter(chapter, folder_name):
 
     :param chapter: chapter info dict
     """
+    folder_name = (opt_prefix + '_' + folder_name)\
+        if opt_prefix else folder_name
+
     chapter_href = chapter['href']
     base = os.path.dirname(chapter_href)
     folder_name = werkzeug.utils.secure_filename(folder_name)
@@ -183,7 +186,7 @@ def load_chapters(url):
     sel = Selector(text)
     hel_gen = sel.css(".chlist h3, .chlist h4")
     chapter_gen = map(hel_to_chapter, hel_gen)
-    available_chapter_gen = filter(lambda v: v['title'], chapter_gen)
+    available_chapter_gen = filter(lambda v: v['href'], chapter_gen)
     return reversed(list(available_chapter_gen))
 
 
@@ -229,7 +232,7 @@ def show_command(name):
         print(line_template.format(
             index='{:03d}'.format(index),
             name=chapter['name'][:30],
-            title=chapter['title']
+            title=chapter['title'] or ''
         ))
 
 
@@ -259,8 +262,6 @@ def download_command(name, args):
             if input('Download all chapters (y/n)? ') == 'y':
                 for index, chapter in enumerate(chapters):
                     folder_name = folder_name_fn(index, chapter)
-                    folder_name = (opt_prefix + '_' + folder_name)\
-                        if opt_prefix else folder_name
                     download_chapter(chapter, folder_name)
         else:
             # force evaluation
